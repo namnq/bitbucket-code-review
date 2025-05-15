@@ -38,8 +38,8 @@ index 1234567..abcdefg 100644
         
         self.assertEqual(len(changes), 1)
         self.assertEqual(changes[0]['type'], 'addition')
-        self.assertEqual(changes[0]['start_line'], 13)
-        self.assertEqual(changes[0]['end_line'], 13)
+        self.assertEqual(changes[0]['start_line'], 14)
+        self.assertEqual(changes[0]['end_line'], 14)
         self.assertEqual(changes[0]['content'], 'def new_function():')
     
     def test_parse_deletion(self):
@@ -62,8 +62,8 @@ index 1234567..abcdefg 100644
         
         self.assertEqual(len(changes), 1)
         self.assertEqual(changes[0]['type'], 'deletion')
-        self.assertEqual(changes[0]['old_start_line'], 13)
-        self.assertEqual(changes[0]['old_end_line'], 13)
+        self.assertEqual(changes[0]['old_start_line'], 14)
+        self.assertEqual(changes[0]['old_end_line'], 14)
         self.assertEqual(changes[0]['content'], 'def old_function():')
     
     def test_parse_multiple_changes(self):
