@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitbucket Galaxy Code Review - Feedback</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #0052CC;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .feedback-form {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="number"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        .rating {
+            display: flex;
+            flex-direction: row-reverse;
+            justify-content: flex-end;
+        }
+        .rating > input {
+            display: none;
+        }
+        .rating > label {
+            position: relative;
+            width: 1.1em;
+            font-size: 2em;
+            color: #FFD700;
+            cursor: pointer;
+        }
+        .rating > label::before {
+            content: "★";
+            position: absolute;
+            opacity: 0;
+        }
+        .rating > label:hover:before,
+        .rating > label:hover ~ label:before {
+            opacity: 1 !important;
+        }
+        .rating > input:checked ~ label:before {
+            opacity: 1;
+        }
+        .rating:hover > input:checked ~ label:before {
+            opacity: 0.4;
+        }
+        .checkbox-group {
+            margin-top: 15px;
+        }
+        .checkbox-group label {
+            display: inline;
+            margin-left: 5px;
+            font-weight: normal;
+        }
+        button {
+            background-color: #0052CC;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background-color: #003d99;
+        }
+        .comment-preview {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .stats {
+            margin-top: 30px;
+            background-color: #e6f3ff;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .stats h2 {
+            margin-top: 0;
+            color: #0052CC;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bitbucket Galaxy Code Review - Feedback</h1>
+    
+    <div class="comment-preview">
+        <h3>Review Comment</h3>
+        <p><strong>File:</strong> <span id="file-path">{{ file_path }}</span></p>
+        <p><strong>Line:</strong> <span id="line-number">{{ line_number }}</span></p>
+        <p><strong>Comment:</strong></p>
+        <div id="comment-content">{{ comment_content }}</div>
+    </div>
+    
+    <div class="feedback-form">
+        <h3>Your Feedback</h3>
+        <form id="feedback-form">
+            <input type="hidden" id="pr-id" name="pr-id" value="{{ pr_id }}">
+            <input type="hidden" id="comment-id" name="comment-id" value="{{ comment_id }}">
+            
+            <div class="rating">
+                <input type="radio" id="star5" name="rating" value="5" />
+                <label for="star5" title="Excellent">5 stars</label>
+                <input type="radio" id="star4" name="rating" value="4" />
+                <label for="star4" title="Good">4 stars</label>
+                <input type="radio" id="star3" name="rating" value="3" checked />
+                <label for="star3" title="Average">3 stars</label>
+                <input type="radio" id="star2" name="rating" value="2" />
+                <label for="star2" title="Poor">2 stars</label>
+                <input type="radio" id="star1" name="rating" value="1" />
+                <label for="star1" title="Terrible">1 star</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="is-helpful" name="is-helpful">
+                <label for="is-helpful">This comment was helpful</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="accepted" name="accepted">
+                <label for="accepted">I implemented the suggested change</label>
+            </div>
+            
+            <label for="user-comment">Additional Comments:</label>
+            <textarea id="user-comment" name="user-comment" rows="4"></textarea>
+            
+            <button type="submit">Submit Feedback</button>
+        </form>
+    </div>
+    
+    <div class="stats">
+        <h2>Feedback Statistics</h2>
+        <p><strong>Total Comments with Feedback:</strong> <span id="total-comments">{{ stats.total_comments }}</span></p>
+        <p><strong>Average Rating:</strong> <span id="average-rating">{{ stats.average_rating }}</span></p>
+        <p><strong>Percentage Marked as Helpful:</strong> <span id="helpful-percentage">{{ stats.helpful_percentage }}%</span></p>
+        <p><strong>Acceptance Rate:</strong> <span id="acceptance-rate">{{ stats.acceptance_rate }}%</span></p>
+    </div>
+    
+    <script>
+        document.getElementById('feedback-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const prId = document.getElementById('pr-id').value;
+            const commentId = document.getElementById('comment-id').value;
+            const filePath = document.getElementById('file-path').textContent;
+            const rating = document.querySelector('input[name="rating"]:checked').value;
+            const isHelpful = document.getElementById('is-helpful').checked;
+            const accepted = document.getElementById('accepted').checked;
+            const userComment = document.getElementById('user-comment').value;
+            
+            const feedbackData = {
+                pr_id: prId,
+                comment_id: commentId,
+                file_path: filePath,
+                feedback: {
+                    rating: parseInt(rating),
+                    is_helpful: isHelpful,
+                    accepted: accepted,
+                    user_comment: userComment
+                }
+            };
+            
+            fetch('/feedback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(feedbackData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Thank you for your feedback!');
+                    // Refresh the page to update statistics
+                    location.reload();
+                } else {
+                    alert('Error submitting feedback: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while submitting your feedback.');
+            });
+        });
+    </script>
+</body>
+</html>

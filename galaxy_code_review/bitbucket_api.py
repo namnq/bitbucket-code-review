@@ -186,6 +186,95 @@ class BitbucketAPI:
         
         response = self._make_request('POST', url, json=comment)
         return response
+        
+    def get_comment_reactions(
+        self,
+        repo_slug: str,
+        pr_id: int,
+        comment_id: str
+    ) -> List[Dict[str, Any]]:
+        """
+        Get reactions on a pull request comment.
+        
+        Args:
+            repo_slug: Repository slug in format workspace/repo-slug
+            pr_id: Pull request ID
+            comment_id: Comment ID
+            
+        Returns:
+            List of reaction objects
+            
+        Raises:
+            Exception: If the API request fails
+        """
+        url = urljoin(self.api_url, f'repositories/{repo_slug}/pullrequests/{pr_id}/comments/{comment_id}/reactions')
+        
+        response = self._make_request('GET', url)
+        return response.get('values', [])
+        
+    def add_reaction(
+        self,
+        repo_slug: str,
+        pr_id: int,
+        comment_id: str,
+        emoji: str
+    ) -> Dict[str, Any]:
+        """
+        Add a reaction to a pull request comment.
+        
+        Args:
+            repo_slug: Repository slug in format workspace/repo-slug
+            pr_id: Pull request ID
+            comment_id: Comment ID
+            emoji: Emoji code (e.g., '👍', '👎')
+            
+        Returns:
+            API response
+            
+        Raises:
+            Exception: If the API request fails
+        """
+        url = urljoin(self.api_url, f'repositories/{repo_slug}/pullrequests/{pr_id}/comments/{comment_id}/reactions')
+        
+        payload = {
+            "emoji": emoji
+        }
+        
+        response = self._make_request('POST', url, json=payload)
+        return response
+        
+    def get_pr_comments(
+        self,
+        repo_slug: str,
+        pr_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all comments on a pull request.
+        
+        Args:
+            repo_slug: Repository slug in format workspace/repo-slug
+            pr_id: Pull request ID
+            
+        Returns:
+            List of comment objects
+            
+        Raises:
+            Exception: If the API request fails
+        """
+        url = urljoin(self.api_url, f'repositories/{repo_slug}/pullrequests/{pr_id}/comments')
+        
+        # Handle pagination
+        all_comments = []
+        next_url = url
+        
+        while next_url:
+            response = self._make_request('GET', next_url)
+            all_comments.extend(response.get('values', []))
+            
+            # Check if there are more pages
+            next_url = response.get('next')
+        
+        return all_comments
     
     def _make_request(
         self, 

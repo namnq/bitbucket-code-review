@@ -60,6 +60,7 @@ class ReviewerAgent:
             - content: Content of the comment
             - severity: 'info', 'warning', or 'error'
             - category: Category of the issue (e.g., 'security', 'performance')
+            - original_response: The original LLM response (for fine-tuning)
         """
         if not changes:
             return []
@@ -67,10 +68,19 @@ class ReviewerAgent:
         # Prepare the prompt for the LLM
         prompt = self._prepare_review_prompt(file_path, changes, context)
         
+        # Store the original prompt in the context for fine-tuning
+        context['original_prompt'] = prompt
+        
         # Get review comments from LLM
         try:
-            review_comments = self._get_llm_review(prompt)
-            return self._parse_llm_response(review_comments)
+            review_response = self._get_llm_review(prompt)
+            comments = self._parse_llm_response(review_response)
+            
+            # Store the original response in each comment for fine-tuning
+            for comment in comments:
+                comment['original_response'] = review_response
+                
+            return comments
         except Exception as e:
             logger.error(f"Error during LLM review: {str(e)}")
             return []

@@ -1,0 +1,10 @@
+{
+  "pr_id": "125",
+  "file_path": "tests/test_main.py",
+  "comment_id": "comment-9",
+  "timestamp": "2025-05-15T17:49:50.085876",
+  "rating": 1,
+  "is_helpful": false,
+  "user_comment": "This suggestion doesn't apply to our codebase.",
+  "accepted": false
+}

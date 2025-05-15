@@ -1,0 +1,10 @@
+{
+  "pr_id": "123",
+  "file_path": "src/main.py",
+  "comment_id": "comment-8",
+  "timestamp": "2025-05-15T17:49:50.085753",
+  "rating": 3,
+  "is_helpful": true,
+  "user_comment": "Good point, but I decided to implement it differently.",
+  "accepted": false
+}

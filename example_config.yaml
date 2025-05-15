@@ -1,0 +1,27 @@
+# Example configuration for feedback and fine-tuning demo
+
+# Bitbucket API configuration (not used in this example)
+bitbucket:
+  username: "example_user"
+  app_password: "example_password"
+  api_url: "https://api.bitbucket.org/2.0/"
+
+# Reviewer agent configuration
+reviewer:
+  model: "gpt-4"
+  temperature: 0.2
+  # api_key: "your_openai_api_key"  # Uncomment and add your key for real usage
+
+# Feedback collection configuration
+feedback:
+  storage_dir: "feedback_data"
+  enable_links: true
+  server_url: "http://localhost:12000"
+
+# Fine-tuning configuration
+fine_tuning:
+  base_model: "gpt-3.5-turbo"
+  training_file_dir: "training_data"
+  min_records: 10
+  min_rating: 4
+  epochs: 3

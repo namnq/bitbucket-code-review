@@ -13,6 +13,28 @@ reviewer:
   # Optional: API key for OpenAI (can also use OPENAI_API_KEY env var)
   # api_key: "your_openai_api_key"
 
+# Feedback collection configuration
+feedback:
+  # Directory to store feedback data
+  storage_dir: "feedback_data"
+  # Enable feedback links in comments
+  enable_links: true
+  # Feedback server URL (used in feedback links)
+  server_url: "http://localhost:8000"
+
+# Fine-tuning configuration
+fine_tuning:
+  # Base model to use for fine-tuning
+  base_model: "gpt-3.5-turbo"
+  # Directory to store training data files
+  training_file_dir: "training_data"
+  # Minimum number of feedback records required for fine-tuning
+  min_records: 10
+  # Minimum rating threshold for including feedback in training
+  min_rating: 4
+  # Number of epochs for fine-tuning
+  epochs: 3
+
 # Optional environment variables to set
 # env_vars:
 #   OPENAI_API_KEY: "your_openai_api_key"

@@ -13,6 +13,17 @@ class CommentFormatter:
     Formats review comments for Bitbucket API.
     """
     
+    def __init__(self, config: Dict[str, Any] = None):
+        """
+        Initialize the comment formatter.
+        
+        Args:
+            config: Configuration dictionary
+        """
+        self.config = config or {}
+        self.feedback_enabled = self.config.get('feedback', {}).get('enable_links', False)
+        self.feedback_server_url = self.config.get('feedback', {}).get('server_url', 'http://localhost:8000')
+    
     def format(self, review_comments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Format review comments for Bitbucket API.
@@ -65,6 +76,46 @@ class CommentFormatter:
                 'to': comment['line']
             }
         }
+        
+        # Add feedback instructions if enabled in configuration
+        if self.feedback_enabled and comment.get('id'):
+            # Check if we should use reactions or web links
+            use_reactions = self.config.get('feedback', {}).get('use_reactions', True)
+            
+            if use_reactions:
+                feedback_instructions = (
+                    "\n\n---\n"
+                    "📊 **Was this comment helpful?** React with an emoji:\n"
+                    "👍 - Helpful and implemented\n"
+                    "❤️ - Very helpful\n"
+                    "🚀 - Good suggestion\n"
+                    "👀 - Seen but not applicable\n"
+                    "👎 - Not helpful"
+                )
+                formatted_comment['content']['raw'] += feedback_instructions
+            else:
+                # Use web links as fallback
+                feedback_link = (
+                    "\n\n---\n"
+                    "📊 **Was this comment helpful?** "
+                    "[👍 Yes]({}/feedback/helpful?id={}&pr={}) | "
+                    "[👎 No]({}/feedback/not-helpful?id={}&pr={})"
+                ).format(
+                    self.feedback_server_url, comment['id'], comment.get('pr_id', ''),
+                    self.feedback_server_url, comment['id'], comment.get('pr_id', '')
+                )
+                formatted_comment['content']['raw'] += feedback_link
+        
+        # Preserve original response for fine-tuning if available
+        if 'original_response' in comment:
+            formatted_comment['original_response'] = comment['original_response']
+            
+        # Generate a unique ID for the comment if not present
+        if 'id' not in comment:
+            import uuid
+            formatted_comment['id'] = str(uuid.uuid4())
+        else:
+            formatted_comment['id'] = comment['id']
         
         return formatted_comment
     

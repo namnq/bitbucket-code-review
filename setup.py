@@ -30,7 +30,16 @@ setup(
         "requests>=2.25.0",
         "pyyaml>=5.4.0",
         "openai>=0.27.0",
+        "flask>=2.0.0",
+        "tqdm>=4.62.0",
     ],
+    extras_require={
+        "dev": [
+            "pytest>=6.0.0",
+            "flake8>=3.9.0",
+            "black>=21.5b2",
+        ],
+    },
     entry_points={
         "console_scripts": [
             "galaxy-review=galaxy_code_review.main:main",
