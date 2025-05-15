@@ -41,6 +41,10 @@ def parse_arguments():
                         help="Start feedback collection server")
     parser.add_argument("--feedback-port", type=int, default=8000,
                         help="Port for feedback collection server")
+    parser.add_argument("--collect-reactions", action="store_true",
+                        help="Collect feedback from PR comment reactions")
+    parser.add_argument("--reactions-pr", type=int,
+                        help="PR ID to collect reactions from (use with --collect-reactions)")
     parser.add_argument("--fine-tune", action="store_true",
                         help="Start fine-tuning process using collected feedback")
     parser.add_argument("--check-fine-tuning", type=str,
@@ -51,10 +55,14 @@ def parse_arguments():
     args = parser.parse_args()
     
     # Validate arguments
-    if not any([args.repo and args.pr_id, args.collect_feedback, 
+    if not any([args.repo and args.pr_id, args.collect_feedback, args.collect_reactions,
                 args.fine_tune, args.check_fine_tuning, args.feedback_stats]):
-        parser.error("Either --repo and --pr-id, or one of --collect-feedback, --fine-tune, "
-                    "--check-fine-tuning, or --feedback-stats is required")
+        parser.error("Either --repo and --pr-id, or one of --collect-feedback, --collect-reactions, "
+                    "--fine-tune, --check-fine-tuning, or --feedback-stats is required")
+                    
+    # Additional validation for reactions collection
+    if args.collect_reactions and not args.reactions_pr:
+        parser.error("--reactions-pr is required when using --collect-reactions")
     
     return args
 
@@ -274,6 +282,50 @@ def check_fine_tuning_status(config, job_id):
         return 1
 
 
+def collect_reactions_feedback(config, repo_slug, pr_id):
+    """
+    Collect feedback from reactions on PR comments.
+    
+    Args:
+        config: Configuration dictionary
+        repo_slug: Repository slug in format workspace/repo-slug
+        pr_id: Pull request ID
+        
+    Returns:
+        0 on success, 1 on error
+    """
+    try:
+        # Initialize components
+        bitbucket_api = BitbucketAPI(config)
+        feedback_collector = FeedbackCollector(config, bitbucket_api)
+        
+        # Collect feedback from reactions
+        logger.info(f"Collecting feedback from reactions in PR #{pr_id} from {repo_slug}")
+        count = feedback_collector.collect_reactions_feedback(repo_slug, pr_id)
+        
+        logger.info(f"Collected {count} feedback records from reactions")
+        
+        # Show updated statistics
+        stats = feedback_collector.get_feedback_stats()
+        logger.info("Updated Feedback Statistics:")
+        logger.info(f"Total comments with feedback: {stats['total_comments']}")
+        logger.info(f"Average rating: {stats['average_rating']}")
+        logger.info(f"Percentage marked as helpful: {stats['helpful_percentage']}%")
+        logger.info(f"Acceptance rate: {stats['acceptance_rate']}%")
+        
+        # Show reaction counts
+        if 'reaction_counts' in stats and stats['reaction_counts']:
+            logger.info("Reaction counts:")
+            for emoji, count in stats['reaction_counts'].items():
+                logger.info(f"  {emoji}: {count}")
+        
+        return 0
+        
+    except Exception as e:
+        logger.error(f"Error collecting reactions feedback: {str(e)}")
+        return 1
+
+
 def show_feedback_stats(config):
     """
     Show statistics from collected feedback.
@@ -293,6 +345,12 @@ def show_feedback_stats(config):
         logger.info(f"Average rating: {stats['average_rating']}")
         logger.info(f"Percentage marked as helpful: {stats['helpful_percentage']}%")
         logger.info(f"Acceptance rate: {stats['acceptance_rate']}%")
+        
+        # Show reaction counts
+        if 'reaction_counts' in stats and stats['reaction_counts']:
+            logger.info("Reaction counts:")
+            for emoji, count in stats['reaction_counts'].items():
+                logger.info(f"  {emoji}: {count}")
         
         return 0
         
@@ -395,6 +453,14 @@ def main():
         # Handle different modes of operation
         if args.collect_feedback:
             return run_feedback_server(config, args.feedback_port)
+        elif args.collect_reactions:
+            # For reactions collection, we need the repo slug
+            repo_slug = args.repo or config.get('bitbucket', {}).get('default_repo')
+            if not repo_slug:
+                logger.error("Repository slug is required for collecting reactions feedback")
+                logger.error("Provide it with --repo or set default_repo in config")
+                return 1
+            return collect_reactions_feedback(config, repo_slug, args.reactions_pr)
         elif args.fine_tune:
             return run_fine_tuning(config)
         elif args.check_fine_tuning:

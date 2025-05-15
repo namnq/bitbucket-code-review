@@ -17,10 +17,14 @@ reviewer:
 feedback:
   # Directory to store feedback data
   storage_dir: "feedback_data"
-  # Enable feedback links in comments
+  # Enable feedback collection in comments
   enable_links: true
-  # Feedback server URL (used in feedback links)
+  # Use Bitbucket reactions for feedback (preferred method)
+  use_reactions: true
+  # Feedback server URL (used in feedback links if use_reactions is false)
   server_url: "http://localhost:8000"
+  # Default repository slug for collecting reactions (optional)
+  # default_repo: "workspace/repo-slug"
 
 # Fine-tuning configuration
 fine_tuning:

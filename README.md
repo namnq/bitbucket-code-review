@@ -53,7 +53,9 @@ reviewer:
 feedback:
   storage_dir: "feedback_data"
   enable_links: true
+  use_reactions: true  # Use Bitbucket PR comment reactions for feedback
   server_url: "http://localhost:8000"
+  default_repo: "workspace/repo-slug"  # Optional default repository
 
 # Fine-tuning configuration
 fine_tuning:
@@ -83,12 +85,27 @@ galaxy-review --config config.yaml --repo workspace/repo-slug --pr-id 123 --debu
 ### Feedback Collection
 
 ```bash
-# Start the feedback collection server
+# Start the feedback collection server (web-based feedback)
 galaxy-review --config config.yaml --collect-feedback --feedback-port 8000
+
+# Collect feedback from PR comment reactions (preferred method)
+galaxy-review --config config.yaml --collect-reactions --reactions-pr 123 --repo workspace/repo-slug
 
 # View feedback statistics
 galaxy-review --config config.yaml --feedback-stats
 ```
+
+#### Using Reactions for Feedback
+
+The preferred way to collect feedback is through Bitbucket PR comment reactions. Users can react to review comments with emojis:
+
+- 👍 - Helpful and implemented (5 stars)
+- ❤️ - Very helpful (5 stars)
+- 🚀 - Good suggestion (4 stars)
+- 👀 - Seen but not applicable (3 stars)
+- 👎 - Not helpful (2 stars)
+
+These reactions are automatically collected and used for model fine-tuning.
 
 ### Model Fine-Tuning
 
