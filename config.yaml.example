@@ -1,0 +1,37 @@
+# Example configuration file for Bitbucket Galaxy Code Review
+
+# Bitbucket API configuration
+bitbucket:
+  username: "your_bitbucket_username"
+  app_password: "your_bitbucket_app_password"
+  api_url: "https://api.bitbucket.org/2.0/"
+
+# Reviewer agent configuration
+reviewer:
+  model: "gpt-4"
+  temperature: 0.2
+  # Optional: API key for OpenAI (can also use OPENAI_API_KEY env var)
+  # api_key: "your_openai_api_key"
+
+# Optional environment variables to set
+# env_vars:
+#   OPENAI_API_KEY: "your_openai_api_key"
+
+# Custom review rules (optional)
+# rules:
+#   security:
+#     enabled: true
+#     severity: "error"
+#   performance:
+#     enabled: true
+#     severity: "warning"
+#   style:
+#     enabled: true
+#     severity: "info"
+
+# Files to exclude from review (optional)
+# exclude:
+#   - "*.min.js"
+#   - "node_modules/**"
+#   - "vendor/**"
+#   - "**/__pycache__/**"
