@@ -32,6 +32,8 @@ setup(
         "openai>=0.27.0",
         "flask>=2.0.0",
         "tqdm>=4.62.0",
+        "anthropic>=0.5.0",
+        "deepseek>=0.1.0",
     ],
     extras_require={
         "dev": [

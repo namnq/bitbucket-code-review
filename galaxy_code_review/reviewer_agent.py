@@ -1,5 +1,6 @@
 """
 Reviewer Agent component that performs the actual code review using LLM.
+Supports multiple model providers: OpenAI (GPT), Anthropic (Claude), and DeepSeek.
 """
 
 import logging
@@ -8,10 +9,21 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Import model provider libraries
 try:
     import openai
 except ImportError:
-    logger.warning("OpenAI package not installed. LLM-based review will not be available.")
+    logger.warning("OpenAI package not installed. GPT models will not be available.")
+
+try:
+    import anthropic
+except ImportError:
+    logger.warning("Anthropic package not installed. Claude models will not be available.")
+
+try:
+    import deepseek
+except ImportError:
+    logger.warning("DeepSeek package not installed. DeepSeek models will not be available.")
 
 
 class ReviewerAgent:
@@ -27,18 +39,61 @@ class ReviewerAgent:
             config: Configuration dictionary
         """
         self.config = config
-        self.model = config['reviewer']['model']
-        self.temperature = config['reviewer']['temperature']
+        reviewer_config = config.get('reviewer', {})
         
-        # Initialize OpenAI client if API key is available
-        api_key = os.environ.get('OPENAI_API_KEY') or config.get('reviewer', {}).get('api_key')
+        # Get model configuration
+        self.provider = reviewer_config.get('provider', 'openai')
+        self.model = reviewer_config.get('model', 'gpt-4')
+        self.temperature = reviewer_config.get('temperature', 0.2)
+        
+        # Initialize clients based on provider
+        if self.provider == 'openai':
+            self._init_openai_client(reviewer_config)
+        elif self.provider == 'anthropic':
+            self._init_anthropic_client(reviewer_config)
+        elif self.provider == 'deepseek':
+            self._init_deepseek_client(reviewer_config)
+        else:
+            logger.warning(f"Unknown model provider: {self.provider}. Defaulting to OpenAI.")
+            self.provider = 'openai'
+            self._init_openai_client(reviewer_config)
+    
+    def _init_openai_client(self, reviewer_config: Dict[str, Any]):
+        """Initialize OpenAI client."""
+        api_key = os.environ.get('OPENAI_API_KEY') or reviewer_config.get('api_key')
         if api_key:
             try:
                 openai.api_key = api_key
+                self.openai_client = openai
+                logger.info("OpenAI client initialized successfully.")
             except NameError:
                 logger.error("OpenAI package not installed. Please install it with 'pip install openai'")
         else:
-            logger.warning("No OpenAI API key provided. LLM-based review will not be available.")
+            logger.warning("No OpenAI API key provided. GPT models will not be available.")
+    
+    def _init_anthropic_client(self, reviewer_config: Dict[str, Any]):
+        """Initialize Anthropic client."""
+        api_key = os.environ.get('ANTHROPIC_API_KEY') or reviewer_config.get('anthropic_api_key')
+        if api_key:
+            try:
+                self.anthropic_client = anthropic.Anthropic(api_key=api_key)
+                logger.info("Anthropic client initialized successfully.")
+            except NameError:
+                logger.error("Anthropic package not installed. Please install it with 'pip install anthropic'")
+        else:
+            logger.warning("No Anthropic API key provided. Claude models will not be available.")
+    
+    def _init_deepseek_client(self, reviewer_config: Dict[str, Any]):
+        """Initialize DeepSeek client."""
+        api_key = os.environ.get('DEEPSEEK_API_KEY') or reviewer_config.get('deepseek_api_key')
+        if api_key:
+            try:
+                self.deepseek_client = deepseek.DeepSeek(api_key=api_key)
+                logger.info("DeepSeek client initialized successfully.")
+            except NameError:
+                logger.error("DeepSeek package not installed. Please install it with 'pip install deepseek'")
+        else:
+            logger.warning("No DeepSeek API key provided. DeepSeek models will not be available.")
     
     def review(
         self, 
@@ -208,7 +263,7 @@ If you don't find any issues, return an empty array: []
     
     def _get_llm_review(self, prompt: str) -> str:
         """
-        Get review comments from the LLM.
+        Get review comments from the LLM based on the configured provider.
         
         Args:
             prompt: Formatted prompt string
@@ -219,11 +274,30 @@ If you don't find any issues, return an empty array: []
         Raises:
             Exception: If the LLM request fails
         """
+        system_message = "You are an expert code reviewer providing detailed, actionable feedback."
+        
+        try:
+            if self.provider == 'openai':
+                return self._get_openai_review(system_message, prompt)
+            elif self.provider == 'anthropic':
+                return self._get_anthropic_review(system_message, prompt)
+            elif self.provider == 'deepseek':
+                return self._get_deepseek_review(system_message, prompt)
+            else:
+                # Fallback to OpenAI if provider is unknown
+                logger.warning(f"Unknown provider {self.provider}, falling back to OpenAI")
+                return self._get_openai_review(system_message, prompt)
+        except Exception as e:
+            logger.error(f"Error calling {self.provider} API: {str(e)}")
+            raise
+    
+    def _get_openai_review(self, system_message: str, prompt: str) -> str:
+        """Get review from OpenAI models."""
         try:
             response = openai.ChatCompletion.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are an expert code reviewer providing detailed, actionable feedback."},
+                    {"role": "system", "content": system_message},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=self.temperature,
@@ -233,10 +307,54 @@ If you don't find any issues, return an empty array: []
             return response.choices[0].message.content
         except NameError:
             # OpenAI package not installed, return mock response for testing
-            logger.warning("Using mock LLM response because OpenAI package is not installed")
+            logger.warning("Using mock OpenAI response because package is not installed")
             return "[]"
         except Exception as e:
-            logger.error(f"Error calling LLM API: {str(e)}")
+            logger.error(f"Error calling OpenAI API: {str(e)}")
+            raise
+    
+    def _get_anthropic_review(self, system_message: str, prompt: str) -> str:
+        """Get review from Anthropic Claude models."""
+        try:
+            response = self.anthropic_client.messages.create(
+                model=self.model,
+                system=system_message,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=self.temperature,
+                max_tokens=2000
+            )
+            
+            return response.content[0].text
+        except AttributeError:
+            # Anthropic client not initialized
+            logger.warning("Using mock Claude response because client is not initialized")
+            return "[]"
+        except Exception as e:
+            logger.error(f"Error calling Anthropic API: {str(e)}")
+            raise
+    
+    def _get_deepseek_review(self, system_message: str, prompt: str) -> str:
+        """Get review from DeepSeek models."""
+        try:
+            response = self.deepseek_client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=self.temperature,
+                max_tokens=2000
+            )
+            
+            return response.choices[0].message.content
+        except AttributeError:
+            # DeepSeek client not initialized
+            logger.warning("Using mock DeepSeek response because client is not initialized")
+            return "[]"
+        except Exception as e:
+            logger.error(f"Error calling DeepSeek API: {str(e)}")
             raise
     
     def _parse_llm_response(self, response: str) -> List[Dict[str, Any]]:

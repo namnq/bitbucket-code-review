@@ -11,6 +11,26 @@ An intelligent code review assistant that integrates with Bitbucket Cloud to pro
 - **Seamless Bitbucket Integration**: Works directly within Bitbucket's pull request workflow
 - **Feedback Loop**: Collects user feedback on review comments to improve future reviews
 - **Model Fine-Tuning**: Uses collected feedback to fine-tune the LLM for better code reviews
+- **Multiple LLM Providers**: Support for OpenAI (GPT), Anthropic (Claude), and DeepSeek models
+
+## Supported Models
+
+The tool supports multiple LLM providers:
+
+### OpenAI Models
+- GPT-4 (recommended)
+- GPT-3.5-Turbo
+- Other OpenAI models
+
+### Anthropic Models
+- Claude-3-Opus
+- Claude-3-Sonnet
+- Claude-3-Haiku
+- Other Claude models
+
+### DeepSeek Models
+- DeepSeek-Coder
+- Other DeepSeek models
 
 ## Architecture
 
@@ -45,9 +65,14 @@ bitbucket:
   api_url: "https://api.bitbucket.org/2.0/"
 
 reviewer:
-  model: "gpt-4"
+  provider: "openai"  # Options: "openai", "anthropic", "deepseek"
+  model: "gpt-4"      # Model name depends on the provider
   temperature: 0.2
-  api_key: "your_openai_api_key"  # Optional, can also use OPENAI_API_KEY env var
+  
+  # API keys for different providers (can also use environment variables)
+  api_key: "your_openai_api_key"           # For OpenAI (or use OPENAI_API_KEY env var)
+  anthropic_api_key: "your_anthropic_key"  # For Claude (or use ANTHROPIC_API_KEY env var)
+  deepseek_api_key: "your_deepseek_key"    # For DeepSeek (or use DEEPSEEK_API_KEY env var)
 
 # Feedback collection configuration
 feedback:

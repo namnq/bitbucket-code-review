@@ -8,10 +8,18 @@ bitbucket:
 
 # Reviewer agent configuration
 reviewer:
+  # Model provider: "openai", "anthropic", or "deepseek"
+  provider: "openai"
+  # Model name to use (depends on the provider)
+  # For OpenAI: "gpt-4", "gpt-3.5-turbo", etc.
+  # For Anthropic: "claude-3-opus-20240229", "claude-3-sonnet-20240229", etc.
+  # For DeepSeek: "deepseek-chat", "deepseek-coder", etc.
   model: "gpt-4"
   temperature: 0.2
-  # Optional: API key for OpenAI (can also use OPENAI_API_KEY env var)
-  # api_key: "your_openai_api_key"
+  # Optional: API keys for different providers (can also use environment variables)
+  # api_key: "your_openai_api_key"  # For OpenAI (or use OPENAI_API_KEY env var)
+  # anthropic_api_key: "your_anthropic_api_key"  # For Claude (or use ANTHROPIC_API_KEY env var)
+  # deepseek_api_key: "your_deepseek_api_key"  # For DeepSeek (or use DEEPSEEK_API_KEY env var)
 
 # Feedback collection configuration
 feedback:

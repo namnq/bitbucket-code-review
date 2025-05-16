@@ -264,16 +264,18 @@ def check_fine_tuning_status(config, job_id):
         fine_tuner = ModelFineTuner(config)
         status = fine_tuner.check_fine_tuning_status(job_id)
         
-        logger.info(f"Fine-tuning job status: {status['status']}")
+        # Get provider information
+        provider = status.get('provider', 'unknown')
+        logger.info(f"Fine-tuning job status for {provider} job: {status['status']}")
         
         if status['status'] == 'succeeded':
             logger.info(f"Fine-tuned model: {status['fine_tuned_model']}")
             
             # Ask if the user wants to update the configuration
-            response = input("Do you want to update the configuration to use this model? (y/n): ")
+            response = input(f"Do you want to update the configuration to use this {provider} model? (y/n): ")
             if response.lower() == 'y':
-                fine_tuner.update_model_in_config(status['fine_tuned_model'])
-                logger.info("Configuration updated to use the fine-tuned model")
+                fine_tuner.update_model_in_config(status['fine_tuned_model'], provider)
+                logger.info(f"Configuration updated to use the fine-tuned {provider} model")
         
         return 0
         
