@@ -111,51 +111,26 @@ class ModelFineTuner:
         else:
             logger.warning("No DeepSeek API key provided. DeepSeek fine-tuning will not be available.")
     
-    def prepare_training_data(self, feedback_records: List[Dict[str, Any]]) -> str:
+    def prepare_training_data(self, feedback_collector, min_rating: int = 4) -> str:
         """
-        Prepare training data from feedback records.
+        Prepare training data from feedback records using the FeedbackCollector.
         
         Args:
-            feedback_records: List of feedback records
+            feedback_collector: FeedbackCollector instance
+            min_rating: Minimum rating threshold for including feedback (default: 4)
             
         Returns:
             Path to the prepared training file
         """
-        # Filter for high-quality feedback (high ratings, marked as helpful)
-        quality_records = [
-            record for record in feedback_records 
-            if record.get("rating", 0) >= 4 and record.get("is_helpful") is True
-        ]
+        # Export feedback data in the format required by the current provider
+        training_examples = feedback_collector.export_feedback_for_fine_tuning(
+            provider=self.provider,
+            min_rating=min_rating
+        )
         
-        if not quality_records:
-            logger.warning("No high-quality feedback records found for training")
+        if not training_examples:
+            logger.warning(f"No high-quality feedback records found for {self.provider} training")
             return ""
-        
-        # Create training examples in the format expected by OpenAI fine-tuning
-        training_examples = []
-        
-        for record in quality_records:
-            # We need to retrieve the original review context and comment
-            # This would typically come from a database, but for this example
-            # we'll assume we have this information in the feedback record
-            
-            # In a real implementation, you would retrieve:
-            # - The original code that was reviewed
-            # - The context provided to the model
-            # - The model's response (the review comment)
-            # - The user's feedback and corrections
-            
-            # For this example, we'll create a simplified training example
-            if "original_prompt" in record and "original_response" in record:
-                # Create a training example with the original prompt and improved response
-                training_example = {
-                    "messages": [
-                        {"role": "system", "content": "You are an expert code reviewer providing detailed, actionable feedback."},
-                        {"role": "user", "content": record["original_prompt"]},
-                        {"role": "assistant", "content": record["original_response"]}
-                    ]
-                }
-                training_examples.append(training_example)
         
         if not training_examples:
             logger.warning("No valid training examples could be created")

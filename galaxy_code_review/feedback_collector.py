@@ -51,7 +51,9 @@ class FeedbackCollector:
         pr_id: str,
         file_path: str,
         comment_id: str,
-        feedback: Dict[str, Any]
+        feedback: Dict[str, Any],
+        provider: Optional[str] = None,
+        model: Optional[str] = None
     ) -> bool:
         """
         Store user feedback for a specific review comment.
@@ -65,11 +67,18 @@ class FeedbackCollector:
                 - is_helpful: Whether the comment was helpful (boolean)
                 - user_comment: Optional user comment about the review
                 - accepted: Whether the suggestion was accepted (boolean)
+            provider: The model provider (openai, anthropic, deepseek)
+            model: The specific model used for the review
                 
         Returns:
             True if feedback was stored successfully, False otherwise
         """
         try:
+            # Get provider and model from config if not provided
+            if not provider or not model:
+                provider = self.config.get('reviewer', {}).get('provider', 'openai')
+                model = self.config.get('reviewer', {}).get('model', 'gpt-4')
+            
             # Create a feedback record
             feedback_record = {
                 "pr_id": pr_id,
@@ -79,7 +88,9 @@ class FeedbackCollector:
                 "rating": feedback.get("rating"),
                 "is_helpful": feedback.get("is_helpful"),
                 "user_comment": feedback.get("user_comment"),
-                "accepted": feedback.get("accepted")
+                "accepted": feedback.get("accepted"),
+                "provider": provider,
+                "model": model
             }
             
             # Generate a unique filename for the feedback
@@ -121,7 +132,9 @@ class FeedbackCollector:
     def collect_reactions_feedback(
         self,
         repo_slug: str,
-        pr_id: int
+        pr_id: int,
+        provider: Optional[str] = None,
+        model: Optional[str] = None
     ) -> int:
         """
         Collect feedback from comment reactions in a pull request.
@@ -129,6 +142,8 @@ class FeedbackCollector:
         Args:
             repo_slug: Repository slug in format workspace/repo-slug
             pr_id: Pull request ID
+            provider: The model provider (openai, anthropic, deepseek)
+            model: The specific model used for the review
             
         Returns:
             Number of feedback records collected
@@ -175,7 +190,9 @@ class FeedbackCollector:
                             pr_id=str(pr_id),
                             file_path=file_path,
                             comment_id=comment_id,
-                            feedback=feedback_data
+                            feedback=feedback_data,
+                            provider=provider,
+                            model=model
                         )
                         
                         if success:
@@ -188,10 +205,13 @@ class FeedbackCollector:
             logger.error(f"Error collecting reactions feedback: {str(e)}")
             return 0
     
-    def get_feedback_stats(self) -> Dict[str, Any]:
+    def get_feedback_stats(self, provider: Optional[str] = None) -> Dict[str, Any]:
         """
         Calculate statistics from collected feedback.
         
+        Args:
+            provider: Optional provider name to filter statistics by provider
+            
         Returns:
             Dictionary containing feedback statistics:
             - total_comments: Total number of comments with feedback
@@ -199,6 +219,7 @@ class FeedbackCollector:
             - helpful_percentage: Percentage of comments marked as helpful
             - acceptance_rate: Percentage of suggestions that were accepted
             - reaction_counts: Count of each reaction type
+            - provider_stats: Statistics broken down by provider (if no provider filter)
         """
         feedback_records = self.get_all_feedback()
         
@@ -208,7 +229,22 @@ class FeedbackCollector:
                 "average_rating": 0,
                 "helpful_percentage": 0,
                 "acceptance_rate": 0,
-                "reaction_counts": {}
+                "reaction_counts": {},
+                "provider_stats": {}
+            }
+        
+        # Filter by provider if specified
+        if provider:
+            feedback_records = [r for r in feedback_records if r.get("provider") == provider]
+            
+        if not feedback_records:
+            return {
+                "total_comments": 0,
+                "average_rating": 0,
+                "helpful_percentage": 0,
+                "acceptance_rate": 0,
+                "reaction_counts": {},
+                "provider_stats": {}
             }
         
         total = len(feedback_records)
@@ -232,10 +268,114 @@ class FeedbackCollector:
         helpful_percentage = (helpful_count / total) * 100 if total > 0 else 0
         acceptance_rate = (accepted_count / total) * 100 if total > 0 else 0
         
+        # Calculate provider-specific statistics if no provider filter was applied
+        provider_stats = {}
+        if not provider:
+            # Group records by provider
+            providers = set(record.get("provider", "unknown") for record in feedback_records)
+            
+            for p in providers:
+                provider_records = [r for r in feedback_records if r.get("provider") == p]
+                p_total = len(provider_records)
+                p_ratings_sum = sum(record.get("rating", 0) for record in provider_records if record.get("rating") is not None)
+                p_helpful_count = sum(1 for record in provider_records if record.get("is_helpful") is True)
+                p_accepted_count = sum(1 for record in provider_records if record.get("accepted") is True)
+                
+                p_average_rating = p_ratings_sum / p_total if p_total > 0 else 0
+                p_helpful_percentage = (p_helpful_count / p_total) * 100 if p_total > 0 else 0
+                p_acceptance_rate = (p_accepted_count / p_total) * 100 if p_total > 0 else 0
+                
+                provider_stats[p] = {
+                    "total_comments": p_total,
+                    "average_rating": round(p_average_rating, 2),
+                    "helpful_percentage": round(p_helpful_percentage, 2),
+                    "acceptance_rate": round(p_acceptance_rate, 2)
+                }
+        
         return {
             "total_comments": total,
             "average_rating": round(average_rating, 2),
             "helpful_percentage": round(helpful_percentage, 2),
             "acceptance_rate": round(acceptance_rate, 2),
-            "reaction_counts": reaction_counts
+            "reaction_counts": reaction_counts,
+            "provider_stats": provider_stats
         }
+        
+    def export_feedback_for_fine_tuning(self, provider: str, min_rating: int = 4) -> List[Dict[str, Any]]:
+        """
+        Export feedback data in a format suitable for fine-tuning models.
+        
+        Args:
+            provider: The model provider to export data for (openai, anthropic, deepseek)
+            min_rating: Minimum rating threshold for including feedback (default: 4)
+            
+        Returns:
+            List of feedback records formatted for fine-tuning
+        """
+        feedback_records = self.get_all_feedback()
+        
+        # Filter by provider and rating
+        filtered_records = [
+            record for record in feedback_records 
+            if record.get("provider") == provider and 
+               record.get("rating", 0) >= min_rating
+        ]
+        
+        # Format depends on the provider
+        if provider == "openai":
+            # OpenAI fine-tuning format
+            return self._format_for_openai_fine_tuning(filtered_records)
+        elif provider == "anthropic":
+            # Anthropic fine-tuning format
+            return self._format_for_anthropic_fine_tuning(filtered_records)
+        elif provider == "deepseek":
+            # DeepSeek fine-tuning format
+            return self._format_for_deepseek_fine_tuning(filtered_records)
+        else:
+            logger.warning(f"Unknown provider: {provider}")
+            return []
+            
+    def _format_for_openai_fine_tuning(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Format feedback data for OpenAI fine-tuning"""
+        formatted_records = []
+        
+        for record in records:
+            # For OpenAI, we need a messages format with system, user, and assistant roles
+            formatted_record = {
+                "messages": [
+                    {"role": "system", "content": "You are a helpful code review assistant."},
+                    {"role": "user", "content": f"Review this code in file {record.get('file_path')}"},
+                    {"role": "assistant", "content": record.get('user_comment', '')}
+                ]
+            }
+            formatted_records.append(formatted_record)
+            
+        return formatted_records
+        
+    def _format_for_anthropic_fine_tuning(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Format feedback data for Anthropic fine-tuning"""
+        formatted_records = []
+        
+        for record in records:
+            # For Anthropic, we use a different format (this is a placeholder - adjust based on actual Anthropic requirements)
+            formatted_record = {
+                "input": f"Review this code in file {record.get('file_path')}",
+                "output": record.get('user_comment', '')
+            }
+            formatted_records.append(formatted_record)
+            
+        return formatted_records
+        
+    def _format_for_deepseek_fine_tuning(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Format feedback data for DeepSeek fine-tuning"""
+        formatted_records = []
+        
+        for record in records:
+            # For DeepSeek, we use a different format (this is a placeholder - adjust based on actual DeepSeek requirements)
+            formatted_record = {
+                "prompt": f"Review this code in file {record.get('file_path')}",
+                "response": record.get('user_comment', '')
+            }
+            formatted_records.append(formatted_record)
+            
+        return formatted_records

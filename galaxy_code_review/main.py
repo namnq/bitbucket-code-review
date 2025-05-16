@@ -47,6 +47,8 @@ def parse_arguments():
                         help="PR ID to collect reactions from (use with --collect-reactions)")
     parser.add_argument("--fine-tune", action="store_true",
                         help="Start fine-tuning process using collected feedback")
+    parser.add_argument("--provider", type=str, choices=["openai", "anthropic", "deepseek"],
+                        help="Specify model provider for fine-tuning or feedback stats")
     parser.add_argument("--check-fine-tuning", type=str,
                         help="Check status of a fine-tuning job by ID")
     parser.add_argument("--feedback-stats", action="store_true",
@@ -90,9 +92,11 @@ def run_feedback_server(config, port):
         @app.route('/', methods=['GET'])
         def index():
             """Home page with feedback statistics."""
-            stats = feedback_collector.get_feedback_stats()
+            provider = request.args.get('provider', None)
+            stats = feedback_collector.get_feedback_stats(provider)
             return render_template('feedback.html', 
                                   stats=stats,
+                                  provider=provider,
                                   pr_id="",
                                   comment_id="",
                                   file_path="",
@@ -133,7 +137,23 @@ def run_feedback_server(config, port):
             """Render feedback form for a specific comment."""
             # In a real implementation, you would retrieve the comment details from a database
             # For this example, we'll use placeholder values
-            stats = feedback_collector.get_feedback_stats()
+            provider = request.args.get('provider', None)
+            stats = feedback_collector.get_feedback_stats(provider)
+            
+            # Try to get the actual feedback record to display provider info
+            feedback_record = None
+            all_feedback = feedback_collector.get_all_feedback()
+            for record in all_feedback:
+                if record.get('pr_id') == pr_id and record.get('comment_id') == comment_id:
+                    feedback_record = record
+                    break
+            
+            # Get provider from the record if available
+            comment_provider = None
+            comment_model = None
+            if feedback_record:
+                comment_provider = feedback_record.get('provider', 'unknown')
+                comment_model = feedback_record.get('model', 'unknown')
             
             return render_template('feedback.html',
                                   pr_id=pr_id,
@@ -141,6 +161,9 @@ def run_feedback_server(config, port):
                                   file_path="example/file.py",
                                   line_number="42",
                                   comment_content="This is a sample comment for demonstration purposes.",
+                                  provider=provider,
+                                  comment_provider=comment_provider,
+                                  comment_model=comment_model,
                                   stats=stats)
         
         @app.route('/feedback/helpful', methods=['GET'])
@@ -148,18 +171,28 @@ def run_feedback_server(config, port):
             """Quick feedback that a comment was helpful."""
             comment_id = request.args.get('id', '')
             pr_id = request.args.get('pr', '')
+            provider = request.args.get('provider', None)
+            model = request.args.get('model', None)
             
             if comment_id and pr_id:
+                feedback_data = {
+                    "rating": 5,
+                    "is_helpful": True,
+                    "accepted": None,
+                    "user_comment": "Marked as helpful via quick feedback link"
+                }
+                
+                # Add provider and model information if available
+                if provider:
+                    feedback_data["provider"] = provider
+                if model:
+                    feedback_data["model"] = model
+                
                 feedback_collector.store_feedback(
                     pr_id=pr_id,
                     file_path="",  # This would be retrieved in a real implementation
                     comment_id=comment_id,
-                    feedback={
-                        "rating": 5,
-                        "is_helpful": True,
-                        "accepted": None,
-                        "user_comment": "Marked as helpful via quick feedback link"
-                    }
+                    feedback=feedback_data
                 )
             
             return redirect(url_for('index'))
@@ -169,18 +202,28 @@ def run_feedback_server(config, port):
             """Quick feedback that a comment was not helpful."""
             comment_id = request.args.get('id', '')
             pr_id = request.args.get('pr', '')
+            provider = request.args.get('provider', None)
+            model = request.args.get('model', None)
             
             if comment_id and pr_id:
+                feedback_data = {
+                    "rating": 2,
+                    "is_helpful": False,
+                    "accepted": None,
+                    "user_comment": "Marked as not helpful via quick feedback link"
+                }
+                
+                # Add provider and model information if available
+                if provider:
+                    feedback_data["provider"] = provider
+                if model:
+                    feedback_data["model"] = model
+                
                 feedback_collector.store_feedback(
                     pr_id=pr_id,
                     file_path="",  # This would be retrieved in a real implementation
                     comment_id=comment_id,
-                    feedback={
-                        "rating": 2,
-                        "is_helpful": False,
-                        "accepted": None,
-                        "user_comment": "Marked as not helpful via quick feedback link"
-                    }
+                    feedback=feedback_data
                 )
             
             return redirect(url_for('index'))
@@ -188,7 +231,8 @@ def run_feedback_server(config, port):
         @app.route('/stats', methods=['GET'])
         def get_stats():
             """API endpoint to get feedback statistics."""
-            stats = feedback_collector.get_feedback_stats()
+            provider = request.args.get('provider', None)
+            stats = feedback_collector.get_feedback_stats(provider)
             return jsonify(stats)
         
         logger.info(f"Starting feedback collection server on port {port}")
@@ -218,28 +262,25 @@ def run_fine_tuning(config):
         feedback_collector = FeedbackCollector(config)
         fine_tuner = ModelFineTuner(config)
         
-        # Get all feedback records
-        feedback_records = feedback_collector.get_all_feedback()
+        # Get provider from config
+        provider = config.get('reviewer', {}).get('provider', 'openai')
+        logger.info(f"Running fine-tuning for provider: {provider}")
         
-        if not feedback_records:
-            logger.error("No feedback records found for fine-tuning")
-            return 1
-        
-        # Prepare training data
-        training_file_path = fine_tuner.prepare_training_data(feedback_records)
+        # Prepare training data using the feedback collector
+        training_file_path = fine_tuner.prepare_training_data(feedback_collector)
         
         if not training_file_path:
-            logger.error("Failed to prepare training data")
+            logger.error(f"Failed to prepare training data for {provider}")
             return 1
         
         # Start fine-tuning job
         job_id = fine_tuner.start_fine_tuning(training_file_path)
         
         if not job_id:
-            logger.error("Failed to start fine-tuning job")
+            logger.error(f"Failed to start {provider} fine-tuning job")
             return 1
         
-        logger.info(f"Fine-tuning job started with ID: {job_id}")
+        logger.info(f"{provider.capitalize()} fine-tuning job started with ID: {job_id}")
         logger.info("You can check the status with --check-fine-tuning")
         
         return 0
@@ -328,21 +369,28 @@ def collect_reactions_feedback(config, repo_slug, pr_id):
         return 1
 
 
-def show_feedback_stats(config):
+def show_feedback_stats(config, provider=None):
     """
     Show statistics from collected feedback.
     
     Args:
         config: Configuration dictionary
+        provider: Optional provider to filter statistics
         
     Returns:
         0 on success, 1 on error
     """
     try:
         feedback_collector = FeedbackCollector(config)
-        stats = feedback_collector.get_feedback_stats()
         
-        logger.info("Feedback Statistics:")
+        # Get stats filtered by provider if specified
+        stats = feedback_collector.get_feedback_stats(provider)
+        
+        if provider:
+            logger.info(f"{provider.upper()} Feedback Statistics:")
+        else:
+            logger.info("Overall Feedback Statistics:")
+            
         logger.info(f"Total comments with feedback: {stats['total_comments']}")
         logger.info(f"Average rating: {stats['average_rating']}")
         logger.info(f"Percentage marked as helpful: {stats['helpful_percentage']}%")
@@ -353,6 +401,16 @@ def show_feedback_stats(config):
             logger.info("Reaction counts:")
             for emoji, count in stats['reaction_counts'].items():
                 logger.info(f"  {emoji}: {count}")
+        
+        # Show provider-specific statistics if no provider filter was applied
+        if not provider and 'provider_stats' in stats and stats['provider_stats']:
+            logger.info("\nProvider-Specific Statistics:")
+            for p, provider_stats in stats['provider_stats'].items():
+                logger.info(f"\n{p.upper()} Statistics:")
+                logger.info(f"  Total comments: {provider_stats['total_comments']}")
+                logger.info(f"  Average rating: {provider_stats['average_rating']}")
+                logger.info(f"  Helpful percentage: {provider_stats['helpful_percentage']}%")
+                logger.info(f"  Acceptance rate: {provider_stats['acceptance_rate']}%")
         
         return 0
         
@@ -408,12 +466,19 @@ def run_code_review(args, config):
             for comment in formatted_comments:
                 # Store the original prompt and response for future fine-tuning
                 if 'original_prompt' in file_context and 'original_response' in comment:
+                    # Get provider and model information from the reviewer agent
+                    provider = reviewer_agent.provider
+                    model = reviewer_agent.model
+                    
                     feedback_data = {
                         "pr_id": str(args.pr_id),
                         "file_path": file_path,
                         "comment_id": comment.get('id', 'unknown'),
                         "original_prompt": file_context['original_prompt'],
                         "original_response": comment['original_response'],
+                        # Store provider and model information
+                        "provider": provider,
+                        "model": model,
                         # Initialize with neutral feedback
                         "rating": 3,
                         "is_helpful": None,
@@ -452,6 +517,13 @@ def main():
         # Load configuration
         config = load_config(args.config)
         
+        # If provider is specified, update the config
+        if args.provider:
+            logger.info(f"Using provider: {args.provider}")
+            if 'reviewer' not in config:
+                config['reviewer'] = {}
+            config['reviewer']['provider'] = args.provider
+        
         # Handle different modes of operation
         if args.collect_feedback:
             return run_feedback_server(config, args.feedback_port)
@@ -468,7 +540,7 @@ def main():
         elif args.check_fine_tuning:
             return check_fine_tuning_status(config, args.check_fine_tuning)
         elif args.feedback_stats:
-            return show_feedback_stats(config)
+            return show_feedback_stats(config, args.provider)
         else:
             return run_code_review(args, config)
         
