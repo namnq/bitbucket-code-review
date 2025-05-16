@@ -103,9 +103,30 @@
             padding: 15px;
             border-radius: 5px;
         }
-        .stats h2 {
+        .stats h2, .stats h3 {
             margin-top: 0;
             color: #0052CC;
+        }
+        .provider-stats {
+            background-color: #f0f8ff;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #0052CC;
+        }
+        .provider-filter {
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        .provider-filter a {
+            color: #0052CC;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+        }
+        .provider-filter a:hover {
+            background-color: #e6f3ff;
         }
     </style>
 </head>
@@ -116,6 +137,12 @@
         <h3>Review Comment</h3>
         <p><strong>File:</strong> <span id="file-path">{{ file_path }}</span></p>
         <p><strong>Line:</strong> <span id="line-number">{{ line_number }}</span></p>
+        {% if comment_provider %}
+        <p><strong>Provider:</strong> <span id="comment-provider">{{ comment_provider }}</span></p>
+        {% endif %}
+        {% if comment_model %}
+        <p><strong>Model:</strong> <span id="comment-model">{{ comment_model }}</span></p>
+        {% endif %}
         <p><strong>Comment:</strong></p>
         <div id="comment-content">{{ comment_content }}</div>
     </div>
@@ -125,6 +152,12 @@
         <form id="feedback-form">
             <input type="hidden" id="pr-id" name="pr-id" value="{{ pr_id }}">
             <input type="hidden" id="comment-id" name="comment-id" value="{{ comment_id }}">
+            {% if comment_provider %}
+            <input type="hidden" id="provider" name="provider" value="{{ comment_provider }}">
+            {% endif %}
+            {% if comment_model %}
+            <input type="hidden" id="model" name="model" value="{{ comment_model }}">
+            {% endif %}
             
             <div class="rating">
                 <input type="radio" id="star5" name="rating" value="5" />
@@ -158,10 +191,36 @@
     
     <div class="stats">
         <h2>Feedback Statistics</h2>
+        {% if provider %}
+        <h3>{{ provider|upper }} Provider Statistics</h3>
+        {% else %}
+        <h3>Overall Statistics</h3>
+        {% endif %}
         <p><strong>Total Comments with Feedback:</strong> <span id="total-comments">{{ stats.total_comments }}</span></p>
         <p><strong>Average Rating:</strong> <span id="average-rating">{{ stats.average_rating }}</span></p>
         <p><strong>Percentage Marked as Helpful:</strong> <span id="helpful-percentage">{{ stats.helpful_percentage }}%</span></p>
         <p><strong>Acceptance Rate:</strong> <span id="acceptance-rate">{{ stats.acceptance_rate }}%</span></p>
+        
+        {% if stats.provider_stats and not provider %}
+        <h3>Provider-Specific Statistics</h3>
+        {% for provider_name, provider_stats in stats.provider_stats.items() %}
+        <div class="provider-stats">
+            <h4>{{ provider_name|upper }}</h4>
+            <p><strong>Total Comments:</strong> {{ provider_stats.total_comments }}</p>
+            <p><strong>Average Rating:</strong> {{ provider_stats.average_rating }}</p>
+            <p><strong>Helpful Percentage:</strong> {{ provider_stats.helpful_percentage }}%</p>
+            <p><strong>Acceptance Rate:</strong> {{ provider_stats.acceptance_rate }}%</p>
+        </div>
+        {% endfor %}
+        {% endif %}
+        
+        <div class="provider-filter">
+            <h3>Filter by Provider</h3>
+            <a href="?">All Providers</a> | 
+            <a href="?provider=openai">OpenAI</a> | 
+            <a href="?provider=anthropic">Anthropic</a> | 
+            <a href="?provider=deepseek">DeepSeek</a>
+        </div>
     </div>
     
     <script>
@@ -176,6 +235,12 @@
             const accepted = document.getElementById('accepted').checked;
             const userComment = document.getElementById('user-comment').value;
             
+            // Get provider and model if available
+            const providerElement = document.getElementById('provider');
+            const modelElement = document.getElementById('model');
+            const provider = providerElement ? providerElement.value : null;
+            const model = modelElement ? modelElement.value : null;
+            
             const feedbackData = {
                 pr_id: prId,
                 comment_id: commentId,
@@ -187,6 +252,14 @@
                     user_comment: userComment
                 }
             };
+            
+            // Add provider and model information if available
+            if (provider) {
+                feedbackData.feedback.provider = provider;
+            }
+            if (model) {
+                feedbackData.feedback.model = model;
+            }
             
             fetch('/feedback', {
                 method: 'POST',
