@@ -302,21 +302,35 @@ def check_fine_tuning_status(config, job_id):
         0 on success, 1 on error
     """
     try:
+        # Get provider from config
+        provider = config.get('reviewer', {}).get('provider', 'openai')
+        logger.info(f"Checking fine-tuning status for provider: {provider}")
+        
         fine_tuner = ModelFineTuner(config)
         status = fine_tuner.check_fine_tuning_status(job_id)
         
-        # Get provider information
-        provider = status.get('provider', 'unknown')
-        logger.info(f"Fine-tuning job status for {provider} job: {status['status']}")
+        if not status:
+            logger.error(f"Failed to get status for {provider} job ID: {job_id}")
+            return 1
+        
+        # Get provider information from status
+        job_provider = status.get('provider', provider)
+        logger.info(f"Fine-tuning job status for {job_provider} job: {status['status']}")
+        
+        # Display additional provider-specific information if available
+        if 'provider_info' in status:
+            logger.info(f"Provider-specific information:")
+            for key, value in status['provider_info'].items():
+                logger.info(f"  {key}: {value}")
         
         if status['status'] == 'succeeded':
             logger.info(f"Fine-tuned model: {status['fine_tuned_model']}")
             
             # Ask if the user wants to update the configuration
-            response = input(f"Do you want to update the configuration to use this {provider} model? (y/n): ")
+            response = input(f"Do you want to update the configuration to use this {job_provider} model? (y/n): ")
             if response.lower() == 'y':
-                fine_tuner.update_model_in_config(status['fine_tuned_model'], provider)
-                logger.info(f"Configuration updated to use the fine-tuned {provider} model")
+                fine_tuner.update_model_in_config(status['fine_tuned_model'], job_provider)
+                logger.info(f"Configuration updated to use the fine-tuned {job_provider} model")
         
         return 0
         
